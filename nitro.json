@@ -1,0 +1,30 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": [
+    "corehaptics"
+  ],
+  "ios": {
+    "iosModuleName": "NitroCoreHaptics"
+  },
+  "android": {
+    "androidNamespace": [
+      "corehaptics"
+    ],
+    "androidCxxLibName": "CoreHaptics"
+  },
+  "autolinking": {
+    "CoreHaptics": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridCoreHaptics"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridCoreHaptics"
+      }
+    }
+  },
+  "ignorePaths": [
+    "**/node_modules"
+  ]
+}
