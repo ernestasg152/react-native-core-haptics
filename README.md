@@ -9,15 +9,21 @@ Low-latency, non-coalescing haptic feedback for continuous input in React Native
 
 ## The problem
 
-`UISelectionFeedbackGenerator`, the API every other React Native haptics library wraps, coalesces repeated calls above ~25 Hz into a single buzz. The moment you build a chart scrubber, a stepper, or any gesture that crosses a threshold faster than the user can think about it, iOS silently drops most of the feedback. Back-and-forth oscillation across a data-point boundary feels flat when it should feel like a ratchet.
+iOS gives you two haptic APIs. UIKit's feedback generators (`UIImpactFeedbackGenerator`, `UISelectionFeedbackGenerator`, `UINotificationFeedbackGenerator`) coalesce above ~25 Hz, so rapid threshold crossings on a chart scrubber or a slider step feel flat. Core Haptics (`CHHapticEngine`) doesn't coalesce; every transient fires.
 
-`expo-haptics`, `react-native-haptic-feedback`, and `react-native-nitro-haptics` all hit this wall because they use the same UIKit generator under the hood.
+But for high-rate continuous input, just reaching for Core Haptics is not enough. Two things matter on the gesture hot path:
+
+1. **The pattern player is cached, not rebuilt per call.** Building a fresh `CHHapticPattern` and `CHHapticPatternPlayer` every tick is ~1ms of allocation on the gesture thread. At 60 Hz that's noticeable work running on the path that decides when the tick fires.
+2. **The call is worklet-callable.** If a tick has to hop back to the JS thread before it touches native, you've added a bridge round-trip per gesture event.
 
 ## The solution
 
-Core Haptics, Apple's lower-level haptic API, does not coalesce. A `CHHapticEngine` backed by a pre-built `CHHapticPatternPlayer` fires every transient you throw at it, regardless of rate. This package wires that up behind a Nitro Module so `tick()` is JSI-resident and callable directly from a Reanimated worklet with no `runOnJS` hop and no bridge latency.
+`react-native-core-haptics` is a small Nitro Module focused on the scrub use case:
 
-Android dispatches via `View.performHapticFeedback` with `SEGMENT_TICK` on Android 14+ (the scrubber-specific constant the platform added in API 34) and `CLOCK_TICK` on older versions. No permissions required; the platform doesn't have the same coalescing problem iOS does.
+- Per-style `CHHapticPatternPlayer`s are built once (lazily on first use, or eagerly via `prepare()`) and reused. The hot path allocates nothing.
+- The hybrid object is JSI-resident, so `tick()` is callable directly from a Reanimated worklet without `runOnJS` and without a bridge hop.
+
+Android dispatches via `View.performHapticFeedback` with `SEGMENT_TICK` on Android 14+ (the scrubber-specific constant the platform added in API 34) and `CLOCK_TICK` on older versions. No permissions required.
 
 ## Install
 
@@ -90,12 +96,12 @@ Non-worklet usage works too: `CoreHaptics.tick()` is safe to call from the JS th
 
 ## How it compares
 
-| | non-coalescing | worklet-callable | iOS backend | Android backend | min iOS |
-|---|:-:|:-:|---|---|:-:|
-| `expo-haptics` | ❌ | ❌ | `UIImpact/Selection/NotificationFeedbackGenerator` | `HapticFeedbackConstants` | 13 |
-| `react-native-haptic-feedback` | ❌ | ❌ | `UIImpact/Selection/NotificationFeedbackGenerator` | `HapticFeedbackConstants` | 10 |
-| `react-native-nitro-haptics` | ❌ | ✅ | `UISelectionFeedbackGenerator` | `HapticFeedbackConstants` | 13 |
-| **`react-native-core-haptics`** | **✅** | **✅** | **`CHHapticEngine` + pre-built pattern player** | `HapticFeedbackConstants.SEGMENT_TICK` | 13 |
+| | worklet-callable | iOS backend | Android backend | min iOS |
+|---|:-:|---|---|:-:|
+| `expo-haptics` | ❌ | UIKit feedback generators (coalesce >25 Hz) | `HapticFeedbackConstants` | 13 |
+| `react-native-haptic-feedback` | ❌ | `CHHapticEngine` (player rebuilt per call) with UIKit fallback | `Vibrator` / `VibrationEffect` | 10 |
+| `react-native-nitro-haptics` | ✅ | `UISelectionFeedbackGenerator` (coalesces >25 Hz) | `HapticFeedbackConstants` | 13 |
+| **`react-native-core-haptics`** | **✅** | **`CHHapticEngine` (cached per-style players, zero-alloc hot path)** | **`HapticFeedbackConstants.SEGMENT_TICK` (API 34+)** | 13 |
 
 ## When to use this vs `expo-haptics`
 
