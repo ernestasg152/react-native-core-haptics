@@ -35,9 +35,11 @@ Requirements:
 - React Native **New Architecture enabled** (`newArchEnabled: true` in app.json, or `RCT_NEW_ARCH_ENABLED=1`)
 - iOS **13+** (Core Haptics minimum)
 - Android **API 21+** (best feel on API 34+ where `SEGMENT_TICK` is available)
-- Reanimated 3+ and Gesture Handler if you want to call from worklets
+- Reanimated **3+** and Gesture Handler if you want to call from worklets. The babel plugin name differs by major: Reanimated 3 uses `react-native-reanimated/plugin`, Reanimated 4 uses `react-native-worklets/plugin` — make sure your `babel.config.js` matches the version you installed.
 
 ## Usage
+
+For a working scrub demo with style switcher and a 200-step rate test, see [`example/`](./example).
 
 ```ts
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -74,7 +76,7 @@ Non-worklet usage works too — `CoreHaptics.tick()` is safe to call from the JS
 | `prepare()` | Warm up the engine + cache the default pattern player. Cheap, idempotent. Call on touch-start so the first `tick()` has zero cold-start latency. Optional. |
 | `tick()` | Fire a single transient using the `selection` preset. Non-coalescing: each call produces a distinct buzz. Safe from worklets. |
 | `tickStyled(style)` | Fire a transient using a named preset (see below). Each style gets its own cached player — still zero-alloc on the hot path. |
-| `tickCustom({ intensity?, sharpness? })` | Raw `CHHapticEventParameter` control. iOS full; Android approximates via `intensity` → closest preset. Each call builds a fresh player (~1ms), so prefer `tickStyled` for 60 Hz hot paths. |
+| `tickCustom({ intensity?, sharpness? })` | Raw `CHHapticEventParameter` control. iOS full; Android maps `intensity` → closest preset (`≥0.7` → `strong`, `0.35–0.7` → `selection`, `<0.35` → `soft`; `sharpness` is unused). Each call builds a fresh player (~1ms), so prefer `tickStyled` for 60 Hz hot paths. |
 | `stop()` | Call on touch-end. Keeps the engine warm for rapid re-touch. |
 | `teardown()` | Hard-shutdown the engine. Rarely needed — the engine auto-recovers from system interruptions. |
 
@@ -104,6 +106,8 @@ Use `react-native-core-haptics` for continuous-input haptics — scrub bars, sli
 The two can coexist in the same app.
 
 ## FAQ
+
+**Why don't I feel anything in the Simulator / Emulator?** Neither has a haptic motor. Always test on a real device. (Also check that system haptics are on in Settings → Sounds & Haptics.)
 
 **Why not an Expo module?** Expo modules can't do JSI worklet dispatch as cleanly as Nitro can. Since worklet-callable `tick()` is half the reason this package exists, Nitro is the right primitive. Expo apps still install this via normal autolinking — you don't need to eject or use a config plugin.
 

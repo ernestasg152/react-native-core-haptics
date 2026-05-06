@@ -1,29 +1,91 @@
 import { StatusBar } from 'expo-status-bar'
-import { useMemo, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   Gesture,
   GestureDetector,
   GestureHandlerRootView,
 } from 'react-native-gesture-handler'
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated'
 
-import { CoreHaptics } from 'react-native-core-haptics'
+import { CoreHaptics, type HapticStyle } from 'react-native-core-haptics'
 
-const TRACK_WIDTH = 300
-const TRACK_HEIGHT = 64
-const TICK_COUNT = 10
-const THUMB_SIZE = 44
+const TRACK_WIDTH = 320
+const TRACK_HEIGHT = 56
+const THUMB_SIZE = 36
+const STYLES: HapticStyle[] = ['selection', 'soft', 'strong']
+const TICK_COUNTS = [10, 40, 100, 200]
 
 export default function App() {
+  const [style, setStyle] = useState<HapticStyle>('selection')
+  const [tickCount, setTickCount] = useState<number>(40)
+
+  useEffect(() => {
+    CoreHaptics.prepare()
+  }, [])
+
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Core Haptics</Text>
+        <Text style={styles.subtitle}>
+          Drag the thumb. Each step fires a distinct transient — even at 200
+          steps across 320pt, no coalescing.
+        </Text>
+
+        <HapticSlider
+          key={tickCount}
+          style={style}
+          tickCount={tickCount}
+        />
+
+        <SegmentedRow label="Style">
+          {STYLES.map(s => (
+            <Segment
+              key={s}
+              label={s}
+              active={s === style}
+              onPress={() => {
+                setStyle(s)
+                // Preview the feel on tap.
+                CoreHaptics.tickStyled(s)
+              }}
+            />
+          ))}
+        </SegmentedRow>
+
+        <SegmentedRow label="Steps">
+          {TICK_COUNTS.map(n => (
+            <Segment
+              key={n}
+              label={String(n)}
+              active={n === tickCount}
+              onPress={() => setTickCount(n)}
+            />
+          ))}
+        </SegmentedRow>
+      </View>
+      <StatusBar style="light" />
+    </GestureHandlerRootView>
+  )
+}
+
+function HapticSlider({
+  style,
+  tickCount,
+}: {
+  style: HapticStyle
+  tickCount: number
+}) {
   const offset = useSharedValue(0)
   const start = useSharedValue(0)
   const lastIndex = useSharedValue(0)
-  const [displayIndex, setDisplayIndex] = useState(0)
+  const segment = TRACK_WIDTH / tickCount
+  // Hide individual tick lines once they get too dense to render usefully.
+  const showTicks = tickCount <= 100
 
   const pan = useMemo(
     () =>
@@ -35,19 +97,12 @@ export default function App() {
         })
         .onUpdate(e => {
           'worklet'
-          const next = clamp(start.value + e.translationX, 0, TRACK_WIDTH)
-          offset.value = next
-
-          const segment = TRACK_WIDTH / TICK_COUNT
-          const idx = Math.min(
-            TICK_COUNT,
-            Math.max(0, Math.round(next / segment))
-          )
+          const raw = clamp(start.value + e.translationX, 0, TRACK_WIDTH)
+          const idx = Math.round(raw / segment)
+          offset.value = idx * segment
           if (idx !== lastIndex.value) {
             lastIndex.value = idx
-            // Worklet-direct call — no runOnJS, no bridge hop.
-            CoreHaptics.tick()
-            runOnJS(setDisplayIndex)(idx)
+            CoreHaptics.tickStyled(style)
           }
         })
         .onEnd(() => {
@@ -55,49 +110,86 @@ export default function App() {
           start.value = offset.value
           CoreHaptics.stop()
         }),
-    [offset, lastIndex, start]
+    [offset, lastIndex, start, segment, style]
   )
 
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offset.value }],
   }))
 
-  const ticks = useMemo(
-    () =>
-      Array.from({ length: TICK_COUNT + 1 }, (_, i) => (
-        <View
-          key={i}
-          style={[
-            styles.tick,
-            { left: (TRACK_WIDTH / TICK_COUNT) * i - 1 + THUMB_SIZE / 2 },
-          ]}
-        />
-      )),
-    []
-  )
+  const ticks = useMemo(() => {
+    if (!showTicks) return null
+    return Array.from({ length: tickCount + 1 }, (_, i) => (
+      <View
+        key={i}
+        style={[
+          styles.tick,
+          {
+            left: segment * i - 1 + THUMB_SIZE / 2,
+            height: i % 10 === 0 ? 14 : 8,
+            top: TRACK_HEIGHT / 2 - (i % 10 === 0 ? 7 : 4),
+          },
+        ]}
+      />
+    ))
+  }, [tickCount, segment, showTicks])
 
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Core Haptics scrub demo</Text>
-        <Text style={styles.subtitle}>
-          Drag the thumb. Every integer crossing fires a distinct transient —
-          no coalescing, even under rapid back-and-forth.
-        </Text>
+    <View style={styles.sliderWrap}>
+      <GestureDetector gesture={pan}>
+        <View style={styles.track}>
+          {showTicks ? (
+            ticks
+          ) : (
+            <View
+              style={[
+                styles.denseRail,
+                { left: THUMB_SIZE / 2, width: TRACK_WIDTH },
+              ]}
+            />
+          )}
+          <Animated.View style={[styles.thumb, thumbStyle]} />
+        </View>
+      </GestureDetector>
+    </View>
+  )
+}
 
-        <GestureDetector gesture={pan}>
-          <View style={styles.track}>
-            {ticks}
-            <Animated.View style={[styles.thumb, thumbStyle]} />
-          </View>
-        </GestureDetector>
+function SegmentedRow({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <View style={styles.segmentedRow}>
+      <Text style={styles.segmentedLabel}>{label}</Text>
+      <View style={styles.segmentedTrack}>{children}</View>
+    </View>
+  )
+}
 
-        <Text style={styles.index}>
-          idx: <Text style={styles.indexValue}>{displayIndex}</Text>
-        </Text>
-      </View>
-      <StatusBar style="light" />
-    </GestureHandlerRootView>
+function Segment({
+  label,
+  active,
+  onPress,
+}: {
+  label: string
+  active: boolean
+  onPress: () => void
+}) {
+  return (
+    <Pressable
+      style={[styles.segment, active && styles.segmentActive]}
+      onPress={onPress}
+    >
+      <Text
+        style={[styles.segmentText, active && styles.segmentTextActive]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   )
 }
 
@@ -125,9 +217,13 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#9a9aa3',
     fontSize: 14,
-    marginBottom: 40,
+    marginBottom: 32,
     textAlign: 'center',
     maxWidth: 320,
+  },
+  sliderWrap: {
+    alignItems: 'flex-start',
+    marginBottom: 32,
   },
   track: {
     width: TRACK_WIDTH + THUMB_SIZE,
@@ -137,9 +233,14 @@ const styles = StyleSheet.create({
   tick: {
     position: 'absolute',
     width: 2,
-    height: 14,
     backgroundColor: '#2f2f3a',
-    top: TRACK_HEIGHT / 2 - 7,
+  },
+  denseRail: {
+    position: 'absolute',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#2f2f3a',
+    top: TRACK_HEIGHT / 2 - 2,
   },
   thumb: {
     width: THUMB_SIZE,
@@ -152,13 +253,43 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  index: {
-    color: '#9a9aa3',
-    fontSize: 14,
-    marginTop: 32,
+  segmentedRow: {
+    width: '100%',
+    maxWidth: TRACK_WIDTH + THUMB_SIZE,
+    marginBottom: 16,
   },
-  indexValue: {
+  segmentedLabel: {
+    color: '#9a9aa3',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  segmentedTrack: {
+    flexDirection: 'row',
+    backgroundColor: '#1c1c24',
+    borderRadius: 10,
+    padding: 4,
+    gap: 4,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 7,
+    alignItems: 'center',
+  },
+  segmentActive: {
+    backgroundColor: '#3a3a48',
+  },
+  segmentText: {
+    color: '#9a9aa3',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  segmentTextActive: {
     color: '#fff',
-    fontWeight: '700',
   },
 })

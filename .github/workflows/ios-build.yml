@@ -60,15 +60,17 @@ jobs:
       - name: Install dependencies (bun)
         run: bun install
 
-      - name: Setup Ruby (bundle)
+      - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
-          working-directory: example/ios
 
       - name: Install xcpretty
         run: gem install xcpretty
+
+      - name: Expo Prebuild (iOS)
+        working-directory: example
+        run: bunx expo prebuild --platform ios --no-install
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
@@ -90,8 +92,8 @@ jobs:
           set -o pipefail && xcodebuild \
             CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++ \
             -derivedDataPath build -UseModernBuildSystem=YES \
-            -workspace $$exampleApp$$.xcworkspace \
-            -scheme $$exampleApp$$ \
+            -workspace example.xcworkspace \
+            -scheme example \
             -sdk iphonesimulator \
             -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 16' \

@@ -14,7 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ernestasg7.example"
+      "bundleIdentifier": "com.ernestasg7.example",
+      "appleTeamId": "B23RCM4GF4"
     },
     "android": {
       "adaptiveIcon": {

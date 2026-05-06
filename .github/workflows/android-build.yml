@@ -62,6 +62,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Expo Prebuild (Android)
+        working-directory: example
+        run: bunx expo prebuild --platform android --no-install
+
       - name: Run Gradle build
         working-directory: example/android
         run: ./gradlew assembleDebug --no-daemon --build-cache
