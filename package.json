@@ -1,6 +1,6 @@
 {
   "name": "react-native-core-haptics",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "iOS Core Haptics for React Native. Low-latency, non-coalescing haptic feedback for continuous input (scrubbing, sliders), via Nitro Modules. Worklet-callable.",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
