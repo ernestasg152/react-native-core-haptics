@@ -14,8 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ernestasg7.example",
-      "appleTeamId": "B23RCM4GF4"
+      "bundleIdentifier": "com.example.corehaptics"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.ernestasg7.example"
+      "package": "com.example.corehaptics"
     },
     "web": {
       "favicon": "./assets/favicon.png"

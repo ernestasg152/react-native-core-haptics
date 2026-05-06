@@ -27,7 +27,7 @@ final class HybridCoreHaptics: HybridCoreHapticsSpec {
   private var supportsHaptics: Bool
   private var fallbackGenerator: UISelectionFeedbackGenerator?
   private let queue = DispatchQueue(
-    label: "com.ernestasg152.core-haptics",
+    label: "com.corehaptics.queue",
     qos: .userInteractive
   )
   private var isStarted: Bool = false
