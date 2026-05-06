@@ -1,0 +1,1 @@
+export { ScrubHaptics } from './ScrubHapticsModule';
